@@ -1,10 +1,11 @@
 import { APIGatewayProxyHandler, APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import 'source-map-support/register';
 import * as AWS from 'aws-sdk';
+import { config } from '../../../config';
 
 const docClient = new AWS.DynamoDB.DocumentClient();
 
-const groupsTable = process.env.GROUPS_TABLE;
+const groupsTable = config.GROUPS_TABLE;
 
 /**
  * A lambda function for getting a list of groups.
