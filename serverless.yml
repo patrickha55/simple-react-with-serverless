@@ -31,10 +31,10 @@ custom:
         version: v1.0.0
         title: Udagram API
         description: Serverless application for images sharing
-      models:
-        - name: GroupRequest
-          contentType: application/json
-          schema: ${file{models/create-group-request.json}}
+    models:
+      - name: GroupRequest
+        contentType: application/json
+        schema: ${file(models/create-group-request.json)}
 
 functions:
   GetGroups:
@@ -61,7 +61,7 @@ functions:
 
 resources:
   Resources:
-    #Resource for validating only the request body in the API Gateway
+    # Resource for validating only the request body in the API Gateway
     RequestBodyValidator:
       Type: AWS::ApiGateway::RequestValidator
       Properties:
@@ -74,6 +74,7 @@ resources:
     GroupsDynamoDBTable:
       Type: AWS::DynamoDB::Table
       Properties:
+        TableName: ${self:provider.environment.GROUPS_TABLE}
         AttributeDefinitions:
           - AttributeName: id
             AttributeType: S
@@ -81,4 +82,3 @@ resources:
           - AttributeName: id
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
-        TableName: ${self:provider.environment.GROUPS_TABLE}
