@@ -94,7 +94,7 @@ functions:
     handler: src/lambda/http/createImage.handler
     events:
       - http:
-          path: images
+          path: groups/images
           method: post
           cors: true
           reqValidatorName: RequestBodyValidator

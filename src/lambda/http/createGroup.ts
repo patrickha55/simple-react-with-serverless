@@ -3,7 +3,7 @@ import {
     APIGatewayProxyEvent,
     APIGatewayProxyResult,
 } from 'aws-lambda';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uniqueId } from 'uuid';
 import 'source-map-support/register';
 import * as AWS from 'aws-sdk';
 import { config } from '../../../config';
@@ -19,7 +19,7 @@ const groupsTable = config.GROUPS_TABLE;
 export const handler: APIGatewayProxyHandler = async (
     event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
-    const itemId = uuidv4();
+    const itemId = uniqueId();
 
     console.debug('ItemId: ', itemId);
 
