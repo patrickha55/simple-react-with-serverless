@@ -1,14 +1,15 @@
-service:
-  name: serverless-udagram-app
+org: patrickha55
+app: serverless-udagram-app
+service: serverless-udagram-app
 
 plugins:
   - serverless-webpack
-  - serverless-reqvalidator-plugin
   - serverless-aws-documentation
+  - serverless-reqvalidator-plugin
 
 provider:
   name: aws
-  runtime: nodejs12.x
+  runtime: nodejs14.x
 
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
@@ -16,7 +17,7 @@ provider:
   environment:
     GROUPS_TABLE: Groups-${self:provider.stage}
     IMAGES_TABLE: Images-${self:provider.stage}
-    IMAGE_ID_INDEX: ImageIdIndex
+    IMAGE_ID_INDEX: imageIdIndex
 
   iamRoleStatements:
     - Effect: Allow
@@ -28,6 +29,7 @@ provider:
     - Effect: Allow
       Action:
         - dynamodb:Query
+        - dynamodb:PutItem
       Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.IMAGES_TABLE}
     - Effect: Allow
       Action:
@@ -45,9 +47,11 @@ custom:
       - name: GroupRequest
         contentType: application/json
         schema: ${file(models/create-group-request.json)}
+      - name: ImageRequest
+        contentType: application/json
+        schema: ${file(models/create-image-request.json)}
 
 functions:
-
   GetGroups:
     handler: src/lambda/http/getGroups.handler
     events:
@@ -74,18 +78,48 @@ functions:
     handler: src/lambda/http/getImages.handler
     events:
       - http:
-          method: get
           path: groups/{groupId}/images
+          method: get
+          cors: true
+  
+  GetImage:
+    handler: src/lambda/http/getImage.handler
+    events:
+      - http:
+          path: images/{imageId}
+          method: get
           cors: true
 
   CreateImage:
     handler: src/lambda/http/createImage.handler
+    events:
+      - http:
+          path: groups/images
+          method: post
+          cors: true
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: Create a new image
+            description: Create a new image
+            requestModels:
+              'application/json': ImageRequest
 
 resources:
   Resources:
+    # Resource for validating only the request body in the API Gateway
+    RequestBodyValidator:
+      Type: AWS::ApiGateway::RequestValidator
+      Properties:
+        Name: 'request-body-validator'
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ValidateRequestBody: true
+        ValidateRequestParameters: false
+
     GroupsDynamoDBTable:
       Type: AWS::DynamoDB::Table
       Properties:
+        TableName: ${self:provider.environment.GROUPS_TABLE}
         AttributeDefinitions:
           - AttributeName: id
             AttributeType: S
@@ -93,11 +127,11 @@ resources:
           - AttributeName: id
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
-        TableName: ${self:provider.environment.GROUPS_TABLE}
 
     ImagesDynamoDBTable:
-      Type: "AWS::DynamoDB::Table"
+      Type: AWS::DynamoDB::Table
       Properties:
+        TableName: ${self:provider.environment.IMAGES_TABLE}
         AttributeDefinitions:
           - AttributeName: groupId
             AttributeType: S
@@ -110,22 +144,11 @@ resources:
             KeyType: HASH
           - AttributeName: timestamp
             KeyType: RANGE
-        BillingMode: PAY_PER_REQUEST
-        TableName: ${self:provider.environment.IMAGES_TABLE}
         GlobalSecondaryIndexes:
           - IndexName: ${self:provider.environment.IMAGE_ID_INDEX}
             KeySchema:
-            - AttributeName: imageId
-              KeyType: HASH
+              - AttributeName: imageId
+                KeyType: HASH
             Projection:
               ProjectionType: ALL
-
-    RequestBodyValidator:
-      Type: AWS::ApiGateway::RequestValidator
-      Properties:
-        Name: 'request-body-validator'
-        RestApiId:
-          Ref: ApiGatewayRestApi
-        ValidateRequestBody: true
-        ValidateRequestParameters: false
-
+        BillingMode: PAY_PER_REQUEST
