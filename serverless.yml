@@ -18,9 +18,8 @@ provider:
     GROUPS_TABLE: Groups-${self:provider.stage}
     IMAGES_TABLE: Images-${self:provider.stage}
     IMAGE_ID_INDEX: imageIdIndex
-    IMAGES_S3_BUCKET: serverless-udagram-images-${self:provider.stage}
+    IMAGES_S3_BUCKET: serverless-udagram-images-${self:provider.stage}-phatht9-2022
     SIGNED_URL_EXPIRATION: 300
-
 
   iamRoleStatements:
     - Effect: Allow
@@ -111,6 +110,9 @@ functions:
             description: Create a new image
             requestModels:
               'application/json': ImageRequest
+              
+  SendUploadNotifications:
+    handler: src/lambda/s3/sendNotifications.handler            
 
 resources:
   Resources:
@@ -165,29 +167,43 @@ resources:
       Type: AWS::S3::Bucket
       Properties:
         BucketName: ${self:provider.environment.IMAGES_S3_BUCKET}
+        NotificationConfiguration:
+          LambdaConfigurations:
+            - Event: s3:ObjectCreated:*
+              Function: !GetAtt SendUploadNotificationsLambdaFunction.Arn
         CorsConfiguration:
-          - AllowedOrigins:
+          CorsRules:
+            - AllowedOrigins:
               - '*'
-            AllowedHeaders:
+              AllowedHeaders:
               - '*'
-            AllowedMethods:
+              AllowedMethods:
               - GET
               - PUT
               - POST
               - DELETE
               - HEAD
-            MaxAge: 3000
+              MaxAge: 3000
 
+    SendUploadNotificationsPermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName: !Ref SendUploadNotificationsLambdaFunction
+        Principal: s3.amazonaws.com
+        SourceAccount: !Ref AWS::AccountId
+        SourceArn: arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}
+          
     BucketPolicy:
       Type: AWS::S3::BucketPolicy
       Properties:
-        PolicyDocuments:
+        PolicyDocument:
           Id: MyPolicy
-          Version: "2021-10-17"
+          Version: 2012-10-17
           Statement:
             - Sid: PublicReadForGetBucketObjects
               Effect: Allow
               Principal: '*'
               Action: 's3:GetObject'
               Resource: 'arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*'
-          Bucket: !Ref AttachmentsBucket
+        Bucket: !Ref AttachmentsBucket

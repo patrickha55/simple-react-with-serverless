@@ -10,7 +10,9 @@ import { config } from '../../../config';
 import { isGroupExists } from '../../helper/isGroupExists';
 
 const docClient = new AWS.DynamoDB.DocumentClient();
-const s3 = new AWS.S3();
+const s3 = new AWS.S3({
+    signatureVersion: 'v4'
+});
 
 const imagesTable = config.IMAGES_TABLE;
 const bucketName = config.IMAGES_S3_BUCKET;
