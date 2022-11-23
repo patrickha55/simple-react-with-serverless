@@ -18,6 +18,7 @@ provider:
     GROUPS_TABLE: Groups-${self:provider.stage}
     IMAGES_TABLE: Images-${self:provider.stage}
     IMAGE_ID_INDEX: imageIdIndex
+    CONNECTIONS_TABLE: Connections-${self:provider.stage}
     IMAGES_S3_BUCKET: serverless-udagram-images-${self:provider.stage}-phatht9-2022
     SIGNED_URL_EXPIRATION: 300
 
@@ -42,6 +43,12 @@ provider:
         - s3:PutObject
         - s3:GetObject
       Resource: arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*
+    - Effect: Allow
+      Action:
+        - dynamodb:Scan
+        - dynamodb:PutItem
+        - dynamodb:DeleteItem
+      Resource: arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.CONNECTIONS_TABLE}
 
 custom:
   documentation:
@@ -112,7 +119,23 @@ functions:
               'application/json': ImageRequest
               
   SendUploadNotifications:
+    environment:
+      STAGE: ${self:provider.stage}
+      API_ID:
+        Ref: WebsocketsApi
     handler: src/lambda/s3/sendNotifications.handler            
+
+  ConnectHandler:
+    handler: src/lambda/webSocket/connect.handler
+    events:
+      - websocket:
+          route: $connect
+  
+  DisconnectHandler:
+    handler: src/lambda/webSocket/disconnect.handler
+    events:
+      - websocket:
+          route: $disconnect
 
 resources:
   Resources:
@@ -163,6 +186,18 @@ resources:
               ProjectionType: ALL
         BillingMode: PAY_PER_REQUEST
 
+    ConnectionDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CONNECTIONS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
     AttachmentsBucket:
       Type: AWS::S3::Bucket
       Properties:
@@ -199,7 +234,7 @@ resources:
       Properties:
         PolicyDocument:
           Id: MyPolicy
-          Version: 2012-10-17
+          Version: "2012-10-17"
           Statement:
             - Sid: PublicReadForGetBucketObjects
               Effect: Allow

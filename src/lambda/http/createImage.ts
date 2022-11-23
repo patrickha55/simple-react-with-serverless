@@ -16,7 +16,7 @@ const s3 = new AWS.S3({
 
 const imagesTable = config.IMAGES_TABLE;
 const bucketName = config.IMAGES_S3_BUCKET;
-const urlExpiration = config.SIGNED_URL_EXPIRATION;
+const urlExpiration = parseInt(config.SIGNED_URL_EXPIRATION);
 
 /**
  * A lambda function for creating a new image.
