@@ -19,7 +19,8 @@ provider:
     IMAGES_TABLE: Images-${self:provider.stage}
     IMAGE_ID_INDEX: imageIdIndex
     CONNECTIONS_TABLE: Connections-${self:provider.stage}
-    IMAGES_S3_BUCKET: serverless-udagram-images-${self:provider.stage}-phatht9-2022
+    IMAGES_S3_BUCKET: serverless-udagram-images-phatht9-2022-${self:provider.stage}
+    THUMBNAILS_S3_BUCKET: serverless-udagram-thumbnail-phatht9-2022-${self:provider.stage}
     SIGNED_URL_EXPIRATION: 300
 
   iamRoleStatements:
@@ -51,6 +52,7 @@ provider:
       Resource: arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.CONNECTIONS_TABLE}
 
 custom:
+  topicName: imagesTopic-${self:provider.stage}
   documentation:
     api:
       info:
@@ -123,7 +125,17 @@ functions:
       STAGE: ${self:provider.stage}
       API_ID:
         Ref: WebsocketsApi
-    handler: src/lambda/s3/sendNotifications.handler            
+    handler: src/lambda/s3/sendNotifications.handler
+    events:
+      - sns:
+          arn:
+            Fn::Join:
+              - ':'
+              - - arn:aws:sns
+                - Ref: AWS::Region
+                - Ref: AWS::AccountId
+                - ${self:custom.topicName}
+          topicName: ${self:custom.topicName}
 
   ConnectHandler:
     handler: src/lambda/webSocket/connect.handler
@@ -136,6 +148,26 @@ functions:
     events:
       - websocket:
           route: $disconnect
+
+  SyncWithElasticsearch:
+    handler: src/lambda/dynamoDb/elasticSearchSync.handler
+    events:
+      - stream:
+          type: dynamodb
+          arn: !GetAtt ImagesDynamoDBTable.StreamArn
+
+  ResizeImage:
+    handler: src/lambda/s3/resizeImage.handler
+    events:
+      - sns:
+          arn:
+            Fn::Join:
+              - ':'
+              - - arn:aws:sns
+                - Ref: AWS::Region
+                - Ref: AWS::AccountId
+                - ${self:custom.topicName}
+          topicName: ${self:custom.topicName}
 
 resources:
   Resources:
@@ -185,6 +217,8 @@ resources:
             Projection:
               ProjectionType: ALL
         BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
 
     ConnectionDynamoDBTable:
       Type: AWS::DynamoDB::Table
@@ -198,14 +232,57 @@ resources:
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
 
-    AttachmentsBucket:
-      Type: AWS::S3::Bucket
+    ImagesTopic:
+      Type: AWS::SNS::Topic
       Properties:
-        BucketName: ${self:provider.environment.IMAGES_S3_BUCKET}
+        DisplayName: Image bucket topic
+        TopicName: ${self:custom.topicName}
+
+    SNSTopicPolicy:
+      Type: AWS::SNS::TopicPolicy
+      Properties:
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                AWS: "*"
+              Action: sns:Publish
+              Resource:
+                !Ref ImagesTopic
+              Condition:
+                ArnLike:
+                  AWS:SourceArn: arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}
+        Topics:
+          - !Ref ImagesTopic
+
+    AttachmentsBucket:
+      Type: 'AWS::S3::Bucket'
+      DependsOn: SNSTopicPolicy
+      Properties:
+        BucketName: '${self:provider.environment.IMAGES_S3_BUCKET}'
         NotificationConfiguration:
-          LambdaConfigurations:
+          TopicConfigurations:
             - Event: s3:ObjectCreated:*
-              Function: !GetAtt SendUploadNotificationsLambdaFunction.Arn
+              Topic: !Ref ImagesTopic
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+              - '*'
+              AllowedHeaders:
+              - '*'
+              AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+              MaxAge: 3000
+
+    ThumbnailsBucket:
+      Type: 'AWS::S3::Bucket'
+      Properties:
+        BucketName: '${self:provider.environment.THUMBNAILS_S3_BUCKET}'
         CorsConfiguration:
           CorsRules:
             - AllowedOrigins:
@@ -229,7 +306,7 @@ resources:
         SourceAccount: !Ref AWS::AccountId
         SourceArn: arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}
           
-    BucketPolicy:
+    ImagesBucketPolicy:
       Type: AWS::S3::BucketPolicy
       Properties:
         PolicyDocument:
@@ -239,6 +316,46 @@ resources:
             - Sid: PublicReadForGetBucketObjects
               Effect: Allow
               Principal: '*'
-              Action: 's3:GetObject'
+              Action: s3:GetObject
               Resource: 'arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*'
         Bucket: !Ref AttachmentsBucket
+
+    ThumbnailsBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        PolicyDocument:
+          Id: MyPolicy
+          Version: "2012-10-17"
+          Statement:
+            - Sid: PublicReadForGetBucketObjects
+              Effect: Allow
+              Principal: '*'
+              Action: s3:GetObject
+              Resource: 'arn:aws:s3:::${self:provider.environment.THUMBNAILS_S3_BUCKET}/*'
+        Bucket: !Ref ThumbnailsBucket
+
+
+    ImagesSearch:
+      Type: AWS::Elasticsearch::Domain
+      Properties:
+        ElasticsearchVersion: '6.3'
+        DomainName: images-search-${self:provider.stage}
+        ElasticsearchClusterConfig:
+          DedicatedMasterEnabled: false
+          InstanceCount: '1'
+          ZoneAwarenessEnabled: false
+          InstanceType: t2.small.elasticsearch
+        EBSOptions:
+          EBSEnabled: true
+          Iops: 0
+          VolumeSize: 10
+          VolumeType: 'gp2'
+
+        AccessPolicies:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                AWS: '*'
+              Action: 'es:*'
+              Resource: arn:aws:es:${self:provider.region}:${AWS::AccountId}:domain/images-search-${self:provider.stage}/*

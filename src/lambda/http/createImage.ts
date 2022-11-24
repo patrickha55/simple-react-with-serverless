@@ -16,6 +16,7 @@ const s3 = new AWS.S3({
 
 const imagesTable = config.IMAGES_TABLE;
 const bucketName = config.IMAGES_S3_BUCKET;
+const thumbnailBucketName = config.THUMBNAILS_S3_BUCKET;
 const urlExpiration = parseInt(config.SIGNED_URL_EXPIRATION);
 
 /**
@@ -47,7 +48,7 @@ export const handler: APIGatewayProxyHandler = async (
         imageId,
         ...parsedBody,
         timestamp,
-        imagesUrl: `https://${bucketName}.s3.amazonaws.com/${imageId}`
+        imagesUrl: `https://${thumbnailBucketName}.s3.amazonaws.com/${imageId}`
     };
 
     await docClient
