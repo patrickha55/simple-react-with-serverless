@@ -68,6 +68,9 @@ custom:
         schema: ${file(models/create-image-request.json)}
 
 functions:
+  Auth:
+    handler: src/lambda/auth/auth0Authorizer.handler
+
   GetGroups:
     handler: src/lambda/http/getGroups.handler
     events:
@@ -83,6 +86,8 @@ functions:
           method: post
           path: groups
           cors: true
+          authorizer:
+            name: Auth
           reqValidatorName: RequestBodyValidator
           documentation:
             summary: Create a new group
@@ -113,6 +118,8 @@ functions:
           path: groups/images
           method: post
           cors: true
+          authorizer:
+            name: Auth
           reqValidatorName: RequestBodyValidator
           documentation:
             summary: Create a new image
@@ -171,6 +178,17 @@ functions:
 
 resources:
   Resources:
+    GatewayResourceDefault4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST'"
+
     # Resource for validating only the request body in the API Gateway
     RequestBodyValidator:
       Type: AWS::ApiGateway::RequestValidator
