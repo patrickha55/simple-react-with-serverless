@@ -10,8 +10,14 @@ import { config } from '../../../config';
 import { isGroupExists } from '../../helper/isGroupExists';
 
 const docClient = new AWS.DynamoDB.DocumentClient();
+const s3 = new AWS.S3({
+    signatureVersion: 'v4'
+});
 
 const imagesTable = config.IMAGES_TABLE;
+const bucketName = config.IMAGES_S3_BUCKET;
+const thumbnailBucketName = config.THUMBNAILS_S3_BUCKET;
+const urlExpiration = parseInt(config.SIGNED_URL_EXPIRATION);
 
 /**
  * A lambda function for creating a new image.
@@ -41,7 +47,8 @@ export const handler: APIGatewayProxyHandler = async (
     const newImage = {
         imageId,
         ...parsedBody,
-        timestamp
+        timestamp,
+        imagesUrl: `https://${thumbnailBucketName}.s3.amazonaws.com/${imageId}`
     };
 
     await docClient
@@ -51,6 +58,8 @@ export const handler: APIGatewayProxyHandler = async (
         })
         .promise();
 
+    const url: string = await getUploadUrl(imageId);
+    
     return {
         statusCode: 201,
         headers: {
@@ -58,6 +67,21 @@ export const handler: APIGatewayProxyHandler = async (
         },
         body: JSON.stringify({
             newImage,
+            uploadUrl: url
         }),
     };
 };
+
+/**
+ * Get a pre-signed url of an S3 bucket.
+ * @param imageId Id of an image.
+ * @returns Pre-signed url.
+ */
+async function getUploadUrl(imageId: string): Promise<string> {
+    return await s3.getSignedUrlPromise('putObject', {
+        Bucket: bucketName,
+        Key: imageId,
+        Expires: urlExpiration
+    });
+}
+
