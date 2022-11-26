@@ -7,4 +7,5 @@ export const config = {
     "SIGNED_URL_EXPIRATION": process.env.SIGNED_URL_EXPIRATION,
     "CONNECTIONS_TABLE": process.env.CONNECTIONS_TABLE,
     "STAGE": process.env.STAGE,
+    "AUTH_0_SECRET": process.env.AUTH_0_SECRET,
 }

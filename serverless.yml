@@ -22,6 +22,7 @@ provider:
     IMAGES_S3_BUCKET: serverless-udagram-images-phatht9-2022-${self:provider.stage}
     THUMBNAILS_S3_BUCKET: serverless-udagram-thumbnail-phatht9-2022-${self:provider.stage}
     SIGNED_URL_EXPIRATION: 300
+    AUTH_0_SECRET: SLJFmjIhGzPp4XMWV9cboowm-beUwVBTB0VOevSTl3hnNXSEIT4pwb9p6Mlsw9Cs
 
   iamRoleStatements:
     - Effect: Allow
